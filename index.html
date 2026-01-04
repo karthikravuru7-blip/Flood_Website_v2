@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flood Hazard Lookup</title>
+    <meta name="description" content="Check flood risk levels for any address using soil data">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 1.1em;
+        }
+
+        .search-box {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 15px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+
+        .example-addresses {
+            font-size: 14px;
+            color: #718096;
+        }
+
+        .example-addresses button {
+            background: none;
+            color: #667eea;
+            padding: 0;
+            margin: 0 5px;
+            text-decoration: underline;
+            font-size: 14px;
+        }
+
+        .result-box {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+
+        .result-box.hidden {
+            display: none;
+        }
+
+        .hazard-severe {
+            background: linear-gradient(135deg, #fee, #fdd);
+            border-left: 4px solid #e53e3e;
+        }
+
+        .hazard-moderate {
+            background: linear-gradient(135deg, #fffaf0, #feebc8);
+            border-left: 4px solid #ed8936;
+        }
+
+        .hazard-slight {
+            background: linear-gradient(135deg, #e6ffe7, #d6ffcc);
+            border-left: 4px solid #83f655;
+        }
+
+        .hazard-not-found {
+            background: linear-gradient(135deg, #f5f7fa, #d1d5db);
+            border-left: 4px solid #6b7280;
+        }
+
+        .hazard-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+
+        .hazard-details {
+            color: #4a5568;
+            line-height: 1.8;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #718096;
+        }
+
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .tech-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin: 5px 5px 5px 0;
+        }
+
+        .error-message {
+            background: #fed7d7;
+            border-left: 4px solid #e53e3e;
+            padding: 15px;
+            border-radius: 8px;
+            color: #742a2a;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🌊 Flood Hazard Lookup</h1>
+            <p class="subtitle">Check flood risk levels for any address using tile-based data loading</p>
+        </div>
+
+        <!-- Search Box -->
+        <div class="search-box">
+            <div class="input-group">
+                <input 
+                    type="text" 
+                    id="addressInput" 
+                    placeholder="Enter an address (e.g., Seattle, WA)"
+                    autocomplete="off"
+                />
+                <button id="searchButton" onclick="searchAddress()">Search</button>
+            </div>
+            <div class="example-addresses">
+                Try: 
+                <button onclick="fillExample('Bothell, WA')">Bothell, WA</button>
+                <button onclick="fillExample('Redmond, WA')">Redmond, WA</button>
+                <button onclick="fillExample('Everett, WA')">Everett, WA</button>
+            </div>
+            <div id="errorMessage" style="display: none;" class="error-message"></div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingBox" class="result-box hidden">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Analyzing flood risk...</p>
+            </div>
+        </div>
+
+        <!-- Result Box -->
+        <div id="resultBox" class="result-box hidden">
+            <div class="hazard-title" id="hazardTitle"></div>
+            <div class="hazard-details" id="hazardDetails"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const TILE_SIZE = 0.1; // Must match your Python tiler setting
+        const TILES_PATH = 'flood_tiles/'; // Path to your tiles folder
+
+        // Cache for the tile map (loaded once on first search)
+        let tileMap = null;
+
+        // Load the tile map (tells us which subdirectory each tile is in)
+        async function loadTileMap() {
+            if (tileMap !== null) {
+                return tileMap; // Already loaded
+            }
+
+            try {
+                const response = await fetch(`${TILES_PATH}tile_map.json`);
+                if (!response.ok) {
+                    throw new Error('Tile map not found');
+                }
+                tileMap = await response.json();
+                console.log('Tile map loaded:', tileMap.total_tiles, 'tiles');
+                return tileMap;
+            } catch (error) {
+                console.error('Error loading tile map:', error);
+                throw new Error('Could not load tile map');
+            }
+        }
+
+        // Get tile key for a coordinate
+        function getTileKey(lat, lon) {
+            const tileLat = Math.floor(lat / TILE_SIZE) * TILE_SIZE;
+            const tileLon = Math.floor(lon / TILE_SIZE) * TILE_SIZE;
+            return `${tileLat.toFixed(1)}_${tileLon.toFixed(1)}`;
+        }
+
+        // Convert Web Mercator to Lat/Lon
+        function webMercatorToLatLon(x, y) {
+            const originShift = 2 * Math.PI * 6378137 / 2.0;
+            const lon = (x / originShift) * 180.0;
+            let lat = (y / originShift) * 180.0;
+            lat = 180 / Math.PI * (2 * Math.atan(Math.exp(lat * Math.PI / 180.0)) - Math.PI / 2.0);
+            return [lat, lon];
+        }
+
+        // Check if point is inside polygon (ray casting algorithm)
+        function isPointInPolygon(point, polygon) {
+            const [testLat, testLon] = point;
+            const coords = polygon.coordinates[0]; // Outer ring
+            
+            // Convert all polygon coordinates to lat/lon
+            const latLonCoords = coords.map(([x, y]) => webMercatorToLatLon(x, y));
+            
+            let inside = false;
+            for (let i = 0, j = latLonCoords.length - 1; i < latLonCoords.length; j = i++) {
+                const [lat1, lon1] = latLonCoords[i];
+                const [lat2, lon2] = latLonCoords[j];
+                
+                const intersect = ((lon1 > testLon) !== (lon2 > testLon)) &&
+                    (testLat < (lat2 - lat1) * (testLon - lon1) / (lon2 - lon1) + lat1);
+                
+                if (intersect) inside = !inside;
+            }
+            
+            return inside;
+        }
+
+        // Geocode address using Nominatim (OpenStreetMap)
+        async function geocodeAddress(address) {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
+            
+            const response = await fetch(url, {
+                headers: {
+                    'User-Agent': 'FloodHazardLookup/1.0'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.length === 0) {
+                throw new Error('Address not found');
+            }
+            
+            return {
+                lat: parseFloat(data[0].lat),
+                lon: parseFloat(data[0].lon),
+                displayName: data[0].display_name
+            };
+        }
+
+        // Load tile data using the tile map to find the correct subdirectory
+        async function loadTile(tileKey) {
+            // Load the tile map if we haven't already
+            const map = await loadTileMap();
+            
+            // Look up which subdirectory this tile is in
+            const subdirectory = map.map[tileKey];
+            
+            if (!subdirectory) {
+                throw new Error('No flood data available for this location');
+            }
+            
+            // Construct the full path: flood_tiles/batch_000/flood_47.8_-122.2.json
+            const url = `${TILES_PATH}${subdirectory}/flood_${tileKey}.json`;
+            console.log('Loading tile from:', url);
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Tile not found');
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Error loading tile:', error);
+                throw new Error('No flood data available for this location');
+            }
+        }
+
+        // Find flood hazard for a point
+        function findFloodHazard(lat, lon, polygons) {
+            for (const polygon of polygons) {
+                if (isPointInPolygon([lat, lon], polygon.geometry)) {
+                    return polygon.hazard;
+                }
+            }
+            return null;
+        }
+
+        // Display results
+        function displayResult(hazard, location) {
+            const resultBox = document.getElementById('resultBox');
+            const hazardTitle = document.getElementById('hazardTitle');
+            const hazardDetails = document.getElementById('hazardDetails');
+            
+            // Remove all hazard classes
+            resultBox.className = 'result-box';
+            
+            if (hazard) {
+                const hazardLevel = hazard.toUpperCase();
+                resultBox.classList.add(`hazard-${hazard.toLowerCase()}`);
+                
+                hazardTitle.textContent = `${hazardLevel} Flood Risk`;
+                hazardDetails.innerHTML = `
+                    <p><strong>Location:</strong> ${location}</p>
+                    <p>${getHazardDescription(hazardLevel)}</p>
+                `;
+            } else {
+                resultBox.classList.add('hazard-not-found');
+                hazardTitle.textContent = 'No Detected Flood Hazard';
+                hazardDetails.innerHTML = `
+                    <p><strong>Location:</strong> ${location}</p>
+                    <p>This area is not within a mapped flood hazard zone.</p>
+                `;
+            }
+            
+            resultBox.classList.remove('hidden');
+        }
+
+        function getHazardDescription(level) {
+            const descriptions = {
+                'SEVERE': 'This area has a high risk of flooding. Precautions should be taken to mitigate flood damage.',
+                'MODERATE': 'This area has moderate flood risk. While not in the highest risk zone, flooding can still occur.',
+                'SLIGHT': 'This area has slight flood risk. Flooding is less common but possible under certain conditions.',
+            };
+            return descriptions[level] || 'Flood risk information is available for this location.';
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Main search function
+        async function searchAddress() {
+            const input = document.getElementById('addressInput');
+            const address = input.value.trim();
+            
+            if (!address) {
+                showError('Please enter an address');
+                return;
+            }
+            
+            // Reset UI
+            document.getElementById('resultBox').classList.add('hidden');
+            document.getElementById('loadingBox').classList.remove('hidden');
+            document.getElementById('searchButton').disabled = true;
+            
+            try {
+                // Step 1: Geocode address
+                const location = await geocodeAddress(address);
+                console.log('Geocoded:', location);
+                
+                // Step 2: Get tile key
+                const tileKey = getTileKey(location.lat, location.lon);
+                console.log('Loading tile:', tileKey);
+                
+                // Step 3: Load tile (will automatically use tile map to find subdirectory)
+                const polygons = await loadTile(tileKey);
+                console.log('Loaded polygons:', polygons.length);
+                
+                // Step 4: Check flood hazard
+                const hazard = findFloodHazard(location.lat, location.lon, polygons);
+                console.log('Hazard:', hazard);
+                
+                // Step 5: Display results
+                displayResult(hazard, location.displayName);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError(error.message);
+            } finally {
+                document.getElementById('loadingBox').classList.add('hidden');
+                document.getElementById('searchButton').disabled = false;
+            }
+        }
+
+        // Fill example address
+        function fillExample(address) {
+            document.getElementById('addressInput').value = address;
+        }
+
+        // Enable Enter key to search
+        document.getElementById('addressInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                searchAddress();
+            }
+        });
+    </script>
+</body>
+</html>
